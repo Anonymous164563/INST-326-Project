@@ -1,3 +1,7 @@
+By utilizing the following library 
+"Mathplotlib(Enables for sin, cos, compatibility)
+SymPy(Creates symbolic math schema)
+Ttk(Creates the usable interface)"
 The application will have only two functions, 5 total. One to do the displaying of the interface(buttons, tabs, etc.). T
 he other will do the calculations. We call the functions graph_Display and graph_Calculations, respectively. 
 We have the function evaluate expression, and look into the expressions. 
