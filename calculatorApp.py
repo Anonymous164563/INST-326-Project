@@ -13,19 +13,25 @@ from mpl_toolkits.mplot3d import Axes3D
 
 # --------------------------- MATH ENGINE ---------------------------
 class MathEngine:
-    """Handles math computations and evaluations."""
+    """
+    Centralized math parsing so trigonometric functions like sin()
+    work consistently across graphing, calculation, and 3D rendering.
+    """
 
-    def _evaluate_expression_for_graph(self, expression):
-        x = sym.Symbol("x")
-        expr = sym.sympify(expression.replace("^", "**"))
-        f = sym.lambdify(x, expr, modules=["numpy"])
-        x_vals = np.linspace(-10, 10, 400)
-        
-        with np.errstate(divide='ignore', invalid='ignore'):
-             y_vals = f(x_vals)
-            
-        y_vals = np.nan_to_num(y_vals, nan=np.nan, posinf=np.nan, neginf=np.nan)
-        return x_vals, y_vals
+    def __init__(self):
+        self.sympy_locals = {
+            "sin": sym.sin,
+            "cos": sym.cos,
+            "tan": sym.tan,
+            "sqrt": sym.sqrt,
+            "pi": sym.pi,
+            "e": sym.E
+        }
+
+    def to_sympy_expr(self, expression: str):
+        expr_str = expression.strip().replace("^", "**")
+        return sym.sympify(expr_str, locals=self.sympy_locals)
+
 
 
 # --------------------------- PLOT MANAGER ---------------------------
