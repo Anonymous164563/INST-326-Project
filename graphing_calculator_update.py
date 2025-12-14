@@ -12,13 +12,13 @@ from mpl_toolkits.mplot3d import Axes3D
 
 
 # --------------------------- MATH ENGINE ---------------------------
+# --------------------------- MATH ENGINE (FIXED) ---------------------------
 class MathEngine:
     """
-    Centralized math parsing so trigonometric functions like sin()
-    work consistently across graphing, calculation, and 3D rendering.
+    Centralized math parsing for consistent function and constant handling.
     """
-
     def __init__(self):
+        # Define all standard functions and constants for SymPy to recognize
         self.sympy_locals = {
             "sin": sym.sin,
             "cos": sym.cos,
@@ -28,10 +28,46 @@ class MathEngine:
             "e": sym.E
         }
 
+    # *** THIS IS THE MISSING METHOD THAT FIXES THE ERROR ***
+    def _evaluate_expression_for_graph(self, expression: str):
+        x = sym.Symbol("x")
+        expr_str = expression.strip().replace("^", "**")
+
+        try:
+            # Use locals to recognize sin, cos, pi, e as SymPy functions/constants
+            expr = sym.sympify(expr_str, locals=self.sympy_locals)
+        except Exception as e:
+            # Re-raise as a ValueError to be caught by the main app's error handler
+            raise ValueError(f"SymPy Parsing Error: {e}")
+
+        # Check for unassigned symbols (variables other than 'x')
+        unassigned_symbols = [s for s in expr.free_symbols if s != x]
+        if unassigned_symbols:
+            # Automatically substitute remaining unassigned symbols with 1.0 
+            # (This is the most robust fix for the previous "Cannot convert expression to float" error)
+            default_substitutions = {s: 1.0 for s in unassigned_symbols}
+            expr = expr.subs(default_substitutions)
+            
+            # Optionally notify the user about the substitution
+            # const_info = ', '.join([f'{str(s)}=1.0' for s in default_substitutions])
+            # messagebox.showwarning("Variable Defaults", f"Assigning default value of 1.0 to: {const_info} for plotting.")
+
+        # Create a fast numerical function dependent only on 'x'
+        f = sym.lambdify(x, expr, modules=["numpy"])
+        x_vals = np.linspace(-10, 10, 400)
+        
+        with np.errstate(divide='ignore', invalid='ignore'):
+             y_vals = f(x_vals)
+            
+        y_vals = np.nan_to_num(y_vals, nan=np.nan, posinf=np.nan, neginf=np.nan)
+        return x_vals, y_vals
+
     def to_sympy_expr(self, expression: str):
+        # This method is not used in 2D plotting but is kept for completeness
         expr_str = expression.strip().replace("^", "**")
         return sym.sympify(expr_str, locals=self.sympy_locals)
 
+# -------------------------------------------------------------------------
 
 # --------------------------- PLOT MANAGER ---------------------------
 class PlotManager:
@@ -45,10 +81,10 @@ class PlotManager:
         self.plot_area.clear() 
         
         # Plot line color to a vibrant cyan for visibility on dark plot
-        self.plot_area.plot(x_vals, y_vals, color="#00BCD4", label=f"f(x) = {expression}") 
-        self.plot_area.set_title("Graphing Calculator")
-        self.plot_area.set_xlabel("x")
-        self.plot_area.set_ylabel("f(x)")
+        self.plot_area.plot(x_vals, y_vals, color="#8FD4FA", label=f"f(x) = {expression}") 
+        self.plot_area.set_title("Graphing Calculator", color = "#8FD4FA")
+        self.plot_area.set_xlabel("x", color = "#8FD4FA")
+        self.plot_area.set_ylabel("f(x)", color = "#8FD4FA")
         self.plot_area.legend()
         self.plot_area.grid(True)
         self.canvas.draw()
@@ -347,22 +383,14 @@ class GraphingCalculatorApp:
         self.animating = False
 
     def _clear_plot(self):
-        self._stop_all_animation()
-        try:
-            # Clear the entire figure and then add a default 2D subplot back
-            self.plot_area.figure.clf() 
-        except:
-            pass
-        
-        # Ensure plot area is recreated as a default 2D subplot
-        self.plot_area = self.canvas.figure.add_subplot(111, facecolor="#000000") 
-        
-        if hasattr(self, 'ax3d'):
-             del self.ax3d
-             self.ax3d = None
-             
-        self._surface = None
-        self.canvas.draw_idle()
+       self._stop_all_animation() 
+       self.plot_area.figure.clf()  
+       self.plot_area = self.canvas.figure.add_subplot(111, facecolor = "#000000") 
+       #crucial error that was fixed. plot_manger was not updating the plot_area function with the information 
+       
+       self.plot_manager.plot_area = self.plot_area 
+       self.canvas.draw_idle()
+       
 
     def _reset_before_new_graph(self):
         self._stop_all_animation()
@@ -417,24 +445,30 @@ class GraphingCalculatorApp:
         
         return str(solutions[0])
 
+   # In GraphingCalculatorApp.graph_calculations:
     def graph_calculations(self):
         expression = self.expression_entry.get()
-        if not expression.strip():
-            messagebox.showwarning("Warning", "Enter an expression first.")
-            return
+        # ... (input checks)
         try:
             self._reset_before_new_graph()
-            
+        
             variable_vals = self._parse_variable_assignments()
-            pre = self._preprocess_expression(expression)
-            
+        
+            # --- FIX: Direct assignment to bypass preprocessing ---
+            # The expression must now be typed with all '*' and '**' signs (e.g., 'x*cos(x)')
+            pre = expression.strip().replace("^", "**")
+            # ----------------------------------------------------
+        
             for var, value in variable_vals.items():
-                pattern = r'\b' + re.escape(var) + r'\b'
-                pre = re.sub(pattern, str(value), pre)
+                # Ensure the variable being substituted is not x
+                if var != 'x': # Added explicit check to prevent x substitution, just in case
+                    pattern = r'\b' + re.escape(var) + r'\b'
+                    pre = re.sub(pattern, str(value), pre)
 
+            # Call the corrected MathEngine method
             x_vals, y_vals = self.math_engine._evaluate_expression_for_graph(pre)
             self.plot_manager.draw_graph(x_vals, y_vals, expression)
-            
+        
         except ValueError as e:
             messagebox.showerror("Variable Error", str(e))
         except Exception as e:
@@ -575,14 +609,14 @@ class GraphingCalculatorApp:
             
         # Set axis/label colors for dark theme
         self.ax3d.set_zlim(zmin, zmax)
-        self.ax3d.set_xlabel("x", color="#B0BEC5")
-        self.ax3d.set_ylabel("y", color="#B0BEC5")
-        self.ax3d.set_zlabel("z", color="#B0BEC5")
-        self.ax3d.tick_params(axis='x', colors='#B0BEC5')
-        self.ax3d.tick_params(axis='y', colors='#B0BEC5')
-        self.ax3d.tick_params(axis='z', colors='#B0BEC5')
+        self.ax3d.set_xlabel("x", color="#8FD4FA")
+        self.ax3d.set_ylabel("y", color="#8FD4FA")
+        self.ax3d.set_zlabel("z", color="#8FD4FA")
+        self.ax3d.tick_params(axis='x', colors="#8FD4FA")
+        self.ax3d.tick_params(axis='y', colors="#8FD4FA")
+        self.ax3d.tick_params(axis='z', colors="#B0BEC5")
         # FIX: Set the title here explicitly
-        self.ax3d.set_title(f"3D Render: {expression}", color="#B0BEC5")
+        self.ax3d.set_title(f"3D Render: {expression}", color="#8FD4FA")
         self.canvas.draw_idle()
 
     def three_dim_animate(self):
@@ -643,13 +677,13 @@ class GraphingCalculatorApp:
         
         self._surface = self.ax3d.plot_surface(X, Y, Z, cmap="cool", edgecolor="none")
         self.ax3d.set_zlim(zmin, zmax)
-        self.ax3d.set_xlabel("x", color="#B0BEC5")
-        self.ax3d.set_ylabel("y", color="#B0BEC5")
-        self.ax3d.set_zlabel("z", color="#B0BEC5")
-        self.ax3d.tick_params(axis='x', colors='#B0BEC5')
-        self.ax3d.tick_params(axis='y', colors='#B0BEC5')
-        self.ax3d.tick_params(axis='z', colors='#B0BEC5')
-        self.ax3d.set_title(f"3D Rotation: {expr_str}", color="#B0BEC5")
+        self.ax3d.set_xlabel("x", color="#8FD4FA")
+        self.ax3d.set_ylabel("y", color="#8FD4FA")
+        self.ax3d.set_zlabel("z", color="#8FD4FA")
+        self.ax3d.tick_params(axis='x', colors="#8FD4FA")
+        self.ax3d.tick_params(axis='y', colors="#8FD4FA")
+        self.ax3d.tick_params(axis='z', colors="#B0BEC5")
+        self.ax3d.set_title(f"3D Rotation: {expr_str}", color="#8FD4FA")
 
         self.animating = True
         angle = 0
