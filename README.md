@@ -1,4 +1,5 @@
 DISCLAIMER: Use calculatorApp.py as the runnable code
+
 By utilizing the following library 
 "Mathplotlib(Enables for sin, cos, compatibility)
 SymPy(Creates symbolic math schema)
