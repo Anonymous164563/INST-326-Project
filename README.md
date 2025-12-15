@@ -1,4 +1,4 @@
-DISCLAIMER: Use calculatorApp.py as the runnable code
+DISCLAIMER: Use calculatorApp.py as the runnable file
 
 By utilizing the following library 
 "Mathplotlib(Enables for sin, cos, compatibility)
